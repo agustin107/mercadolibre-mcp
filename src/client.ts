@@ -106,6 +106,34 @@ export async function mlMultiGet<T>(ids: string[], path: string): Promise<T[]> {
   return results
 }
 
+export interface MLPagingResult<T> {
+  results: T[]
+  paging: { total: number; offset: number; limit: number }
+}
+
+// ponytail: offset cap 10k — ML API limit; upgrade path: date-range chunking
+const MAX_OFFSET = 10000
+
+export async function mlGetAll<T>(
+  path: string,
+  params: Record<string, string | number | undefined> = {},
+  pageSize = 50,
+): Promise<T[]> {
+  const results: T[] = []
+  let offset = 0
+
+  while (offset < MAX_OFFSET) {
+    const page = await mlFetch<MLPagingResult<T>>(path, {
+      params: { ...params, limit: pageSize, offset },
+    })
+    results.push(...page.results)
+    if (offset + pageSize >= page.paging.total || page.results.length === 0) break
+    offset += pageSize
+  }
+
+  return results
+}
+
 function isRetryable(error: Error): boolean {
   const msg = error.message.toLowerCase()
   return (

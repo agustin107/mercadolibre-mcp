@@ -29,6 +29,7 @@ export interface MLProduct {
   last_updated: string
   health?: number
   catalog_listing?: boolean
+  seller_custom_field?: string
 }
 
 export interface MLOrder {

@@ -1,0 +1,35 @@
+{
+  "skill_name": "mercadolibre-mcp",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "listame mis publicaciones activas en mercadolibre",
+      "expected_output": "Usa list_products con seller_id y status active; muestra id, título, precio, stock, SKU y link",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "actualizá el stock a 10 del producto con SKU I140-6-220 en meli",
+      "expected_output": "Resuelve item via get_item_by_sku, confirma stock anterior, ejecuta update_stock; no pide refresh manual de token",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "comparame qué datos tienen mis productos en tiendanube vs mercado libre para ver qué le falta a meli",
+      "expected_output": "Lista productos en ambos canales, matchea por SKU, compara descripción, imágenes, atributos y marca; prioriza gaps accionables",
+      "files": []
+    },
+    {
+      "id": 4,
+      "prompt": "cuánto vendí el último mes y cuáles tienen riesgo de quedarse sin stock?",
+      "expected_output": "get_revenue_summary(days=30) + stockout_risk o get_inventory_alerts; resumen ejecutivo con números",
+      "files": []
+    },
+    {
+      "id": 5,
+      "prompt": "tengo preguntas sin responder en mercado libre?",
+      "expected_output": "list_questions con status UNANSWERED; cuenta total y muestra las más recientes",
+      "files": []
+    }
+  ]
+}

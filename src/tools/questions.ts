@@ -1,6 +1,3 @@
-// READ-ONLY SUBSET — answer_question (write) no está incluida.
-// Para responder preguntas automáticamente, ver @traid/mercadolibre-mcp (versión completa).
-
 import { z } from 'zod'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { mlFetch } from '../client.js'
@@ -61,6 +58,34 @@ export function registerListQuestions(server: McpServer) {
           type: 'text' as const,
           text: `${result.questions.length} preguntas (de ${result.total} total):\n\n` +
             JSON.stringify(questions, null, 2),
+        }],
+      }
+    }
+  )
+}
+
+export function registerAnswerQuestion(server: McpServer) {
+  server.tool(
+    'answer_question',
+    'Responde una pregunta en Mercado Libre. La respuesta es pública y visible por todos los compradores.',
+    {
+      question_id: z.number().describe('ID numérico de la pregunta a responder'),
+      text: z.string().min(1).max(2000).describe('Texto de la respuesta'),
+    },
+    async ({ question_id, text }) => {
+      await mlFetch<{ id: number; status: string }>(
+        `/answers`,
+        {
+          method: 'POST',
+          body: { question_id, text },
+        }
+      )
+
+      return {
+        content: [{
+          type: 'text' as const,
+          text: `Pregunta #${question_id} respondida exitosamente.\n` +
+            `Respuesta: "${text.substring(0, 100)}${text.length > 100 ? '...' : ''}"`,
         }],
       }
     }

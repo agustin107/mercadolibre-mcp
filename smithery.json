@@ -26,22 +26,22 @@
       {
         "name": "ML_ACCESS_TOKEN",
         "required": false,
-        "description": "Access token directo (modo simple, requiere renovación externa)"
+        "description": "Access token directo (modo avanzado — requiere renovación EXTERNA manual cada 6h; NO recomendado)"
       },
       {
         "name": "ML_CLIENT_ID",
         "required": false,
-        "description": "Client ID de tu aplicación ML (modo auto-refresh)"
+        "description": "Client ID (modo recomendado: auto-refresh integrado — sin mantenimiento manual)"
       },
       {
         "name": "ML_CLIENT_SECRET",
         "required": false,
-        "description": "Client secret (modo auto-refresh)"
+        "description": "Client secret (modo auto-refresh — el MCP renueva tokens solo)"
       },
       {
         "name": "ML_REFRESH_TOKEN",
         "required": false,
-        "description": "Refresh token obtenido en el OAuth flow (modo auto-refresh)"
+        "description": "Refresh token del OAuth inicial (una vez). El MCP lo usa y rota automáticamente — NUNCA refresh manual"
       },
       {
         "name": "ML_SITE_ID",

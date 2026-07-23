@@ -1,59 +1,62 @@
 {
-  "name": "@nahuelalbornoz/mercadolibre-mcp-read",
-  "version": "1.0.0",
-  "description": "MCP server read-only para Mercado Libre — 7 tools de análisis y consulta de seller operations (productos, órdenes, preguntas, métricas, reputación, competencia, categorías).",
-  "license": "MIT",
-  "type": "module",
-  "main": "dist/index.js",
-  "bin": {
-    "mercadolibre-mcp-read": "dist/index.js"
-  },
-  "files": [
-    "dist",
-    "README.md",
-    "LICENSE",
-    "SKILL.md"
-  ],
-  "scripts": {
-    "build": "tsc",
-    "dev": "tsx src/index.ts",
-    "start": "node dist/index.js",
-    "prepublishOnly": "npm run build"
-  },
-  "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.27.1",
-    "zod": "^3.24.0"
-  },
-  "devDependencies": {
-    "@types/node": "^25.6.0",
-    "tsx": "^4.19.0",
-    "typescript": "^5.7.0"
-  },
-  "engines": {
-    "node": ">=18"
-  },
-  "keywords": [
-    "mcp",
-    "model-context-protocol",
-    "mercadolibre",
-    "mercado-libre",
-    "mercadolivre",
-    "ecommerce",
-    "seller",
-    "latam",
-    "claude",
-    "anthropic",
-    "ai",
-    "agent",
-    "read-only"
-  ],
-  "author": "TRAID Agency <contacto@traid.agency>",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/MarcosNahuel/mercadolibre-mcp-read.git"
-  },
-  "bugs": {
-    "url": "https://github.com/MarcosNahuel/mercadolibre-mcp-read/issues"
-  },
-  "homepage": "https://github.com/MarcosNahuel/mercadolibre-mcp-read#readme"
+	"name": "@agustin107/mercadolibre-mcp",
+	"version": "2.5.0",
+	"description": "MCP server operativo para Mercado Libre — 40 tools de seller operations. Auto-refresh OAuth integrado (sin renovación manual de tokens).",
+	"license": "MIT",
+	"type": "module",
+	"main": "dist/index.js",
+	"bin": {
+		"mercadolibre-mcp": "dist/index.js"
+	},
+	"files": [
+		"dist",
+		"README.md",
+		"LICENSE",
+		"SKILL.md",
+		"references",
+		"SPEC.md"
+	],
+	"scripts": {
+		"build": "tsc",
+		"dev": "tsx src/index.ts",
+		"start": "node dist/index.js",
+		"mcp": "bash scripts/run-mcp.sh",
+		"test": "node --import tsx --test tests/**/*.test.ts",
+		"prepublishOnly": "npm run build"
+	},
+	"dependencies": {
+		"@modelcontextprotocol/sdk": "^1.27.1",
+		"zod": "^3.24.0"
+	},
+	"devDependencies": {
+		"@types/node": "^25.6.0",
+		"tsx": "^4.19.0",
+		"typescript": "^5.7.0"
+	},
+	"engines": {
+		"node": ">=18"
+	},
+	"keywords": [
+		"mcp",
+		"model-context-protocol",
+		"mercadolibre",
+		"mercado-libre",
+		"mercadolivre",
+		"ecommerce",
+		"seller",
+		"latam",
+		"claude",
+		"anthropic",
+		"ai",
+		"agent"
+	],
+	"author": "Axionline <info@axionline.com>",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/agustin107/mercadolibre-mcp.git"
+	},
+	"bugs": {
+		"url": "https://github.com/agustin107/mercadolibre-mcp/issues"
+	},
+	"homepage": "https://github.com/agustin107/mercadolibre-mcp#readme"
 }

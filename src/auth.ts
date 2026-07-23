@@ -1,43 +1,65 @@
 // OAuth2 para Mercado Libre — soporta 2 modos:
-// 1. Token directo (ML_ACCESS_TOKEN) — refresheado externamente por n8n/cron
-// 2. Auto-refresh (ML_CLIENT_ID + ML_CLIENT_SECRET + ML_REFRESH_TOKEN) — refresh interno cada 6h
+// 1. Token directo (ML_ACCESS_TOKEN) — solo si renovás externamente (NO recomendado)
+// 2. Auto-refresh (ML_CLIENT_ID + ML_CLIENT_SECRET + ML_REFRESH_TOKEN) — RECOMENDADO; refresh interno cada ~6h
+//
+// ⛔ REGLA PARA AGENTES/LLMs: NUNCA pedir refresh manual. Este módulo refresca solo (single-flight).
+// Única excepción: invalid_grant → re-OAuth inicial, no curl refresh.
+//
+// REGLA DE LOGGING: JAMÁS se loguea el valor de un token (ni truncado).
+// Single-flight in-process: el refresh_token de ML rota en cada refresh.
 
+import { persistEnvVar } from './env-file.js'
 import type { MLConfig, TokenData } from './types.js'
 
 const ML_AUTH_URL = 'https://api.mercadolibre.com/oauth/token'
 
 let cachedToken: TokenData | null = null
+let skipDirectToken = false
+let refreshInflight: Promise<TokenData> | null = null
 
 export function getConfig(): MLConfig {
-  const clientId = process.env.ML_CLIENT_ID || ''
-  const clientSecret = process.env.ML_CLIENT_SECRET || ''
-  const refreshToken = process.env.ML_REFRESH_TOKEN || ''
-  const siteId = process.env.ML_SITE_ID || 'MLA'
-
-  return { clientId, clientSecret, refreshToken, siteId }
+  return {
+    clientId: process.env.ML_CLIENT_ID || '',
+    clientSecret: process.env.ML_CLIENT_SECRET || '',
+    refreshToken: process.env.ML_REFRESH_TOKEN || '',
+    siteId: process.env.ML_SITE_ID || 'MLA',
+  }
 }
 
 export async function getAccessToken(): Promise<string> {
-  // Modo 1: Token directo (gestionado externamente por n8n, cron, etc.)
+  const config = getConfig()
+  const canRefresh = Boolean(config.clientId && config.clientSecret && config.refreshToken)
+
   const directToken = process.env.ML_ACCESS_TOKEN
-  if (directToken) {
+  if (directToken && !skipDirectToken) {
     return directToken
   }
 
-  // Modo 2: Auto-refresh con OAuth2
-  // Si el token está cacheado y no expiró (con 5 min de margen), reusar
   if (cachedToken && cachedToken.expiresAt > Date.now() + 5 * 60 * 1000) {
     return cachedToken.accessToken
   }
 
-  const config = getConfig()
-
-  if (!config.clientId || !config.clientSecret || !config.refreshToken) {
+  if (!canRefresh) {
     throw new Error(
-      'Configurá ML_ACCESS_TOKEN (token directo) o ML_CLIENT_ID + ML_CLIENT_SECRET + ML_REFRESH_TOKEN (auto-refresh). ' +
-      'Si usás n8n para renovar el token, configurá ML_ACCESS_TOKEN.'
+      'Configurá ML_ACCESS_TOKEN (token directo) o ML_CLIENT_ID + ML_CLIENT_SECRET + ML_REFRESH_TOKEN (auto-refresh).'
     )
   }
+
+  if (refreshInflight) {
+    const tok = await refreshInflight
+    return tok.accessToken
+  }
+
+  const p = refreshTokenOAuth().finally(() => {
+    refreshInflight = null
+  })
+  refreshInflight = p
+  const tok = await p
+  return tok.accessToken
+}
+
+async function refreshTokenOAuth(): Promise<TokenData> {
+  const config = getConfig()
 
   const response = await fetch(ML_AUTH_URL, {
     method: 'POST',
@@ -51,10 +73,9 @@ export async function getAccessToken(): Promise<string> {
   })
 
   if (!response.ok) {
-    const errorText = await response.text()
     throw new Error(
-      `Error renovando token ML (${response.status}): ${errorText}. ` +
-      'Verificá que ML_CLIENT_ID, ML_CLIENT_SECRET y ML_REFRESH_TOKEN sean correctos.'
+      `Error renovando token ML (HTTP ${response.status}). ` +
+      'Verificá ML_CLIENT_ID, ML_CLIENT_SECRET y ML_REFRESH_TOKEN.'
     )
   }
 
@@ -69,18 +90,20 @@ export async function getAccessToken(): Promise<string> {
     expiresAt: Date.now() + data.expires_in * 1000,
   }
 
-  // Actualizar el refresh_token si ML devuelve uno nuevo
+  skipDirectToken = false
+  persistEnvVar('ML_ACCESS_TOKEN', data.access_token)
+
   if (data.refresh_token && data.refresh_token !== config.refreshToken) {
-    process.env.ML_REFRESH_TOKEN = data.refresh_token
-    console.error(
-      `[ml-mcp] Refresh token actualizado. Nuevo: ${data.refresh_token.substring(0, 20)}...`
-    )
+    persistEnvVar('ML_REFRESH_TOKEN', data.refresh_token)
+    console.error('[ml-mcp] Refresh token rotado (persistido en .env.local, valor no logueado).')
   }
 
-  return cachedToken.accessToken
+  console.error('[ml-mcp] Access token refrescado ok.')
+  return cachedToken
 }
 
-// Para tests o reset manual
 export function clearTokenCache(): void {
   cachedToken = null
+  refreshInflight = null
+  skipDirectToken = true
 }
