@@ -248,20 +248,41 @@ export function registerUpdateItem(server: McpServer) {
 export function registerCreateItem(server: McpServer) {
   server.tool(
     'create_item',
-    'Crea una nueva publicación en Mercado Libre (paridad TN create_product). Flujo mínimo: título, categoría, precio, stock, condición, tipo de listado y al menos una foto.',
+    'Crea una nueva publicación en Mercado Libre (paridad TN create_product). Flujo mínimo: título, categoría, precio, stock, condición, tipo de listado y al menos una foto. Muchas categorías exigen attributes obligatorios (BRAND, MODEL, etc. — consultar get_category_attributes); se pasan en `attributes`. Admite varias fotos, descripción, sale_terms (garantía) y shipping.',
     {
       title: z.string().min(1).describe('Título de la publicación'),
       category_id: z.string().describe('ID de categoría ML (usar get_categories para obtenerlo)'),
       price: z.number().positive().describe('Precio'),
       available_quantity: z.number().int().min(1).describe('Stock inicial'),
-      picture_url: z.string().url().describe('URL pública de la imagen principal'),
+      picture_url: z.string().url().optional().describe('URL pública de la imagen principal (alternativa simple a pictures)'),
+      pictures: z.array(z.string().url()).optional().describe('URLs públicas de las imágenes (reemplaza a picture_url si se pasa)'),
       condition: z.enum(['new', 'used']).optional().describe('Condición (default: new)'),
       listing_type_id: z.enum(['gold_special', 'gold_pro', 'free']).optional()
-        .describe('Tipo de listado (default: gold_special)'),
+        .describe('Tipo de listado (default: gold_special = Clásica; gold_pro = Premium)'),
       seller_custom_field: z.string().optional().describe('SKU del vendedor'),
+      attributes: z.array(z.object({
+        id: z.string().describe('ID del atributo (ej: BRAND, MODEL, VOLTAGE)'),
+        value_name: z.string().optional().describe('Valor por nombre (ej: "Energy")'),
+        value_id: z.string().optional().describe('Valor por id de catálogo (alternativa a value_name)'),
+      })).optional().describe('Atributos de ficha. Las categorías suelen exigir BRAND y MODEL como mínimo (ver get_category_attributes con required=true).'),
+      sale_terms: z.array(z.object({
+        id: z.string().describe('ID del sale_term (ej: WARRANTY_TYPE, WARRANTY_TIME)'),
+        value_name: z.string().describe('Valor (ej: "Garantía de fábrica", "3 meses")'),
+      })).optional().describe('Términos de venta (garantía, etc.)'),
+      description: z.string().optional().describe('Descripción en texto plano (se carga en un segundo paso vía POST /items/{id}/description)'),
+      local_pick_up: z.boolean().optional().describe('Permitir retiro en persona'),
+      free_shipping: z.boolean().optional().describe('Ofrecer envío gratis (si la categoría/precio no lo fuerza, dejar false)'),
     },
-    async ({ title, category_id, price, available_quantity, picture_url, condition = 'new', listing_type_id = 'gold_special', seller_custom_field }) => {
+    async ({ title, category_id, price, available_quantity, picture_url, pictures, condition = 'new', listing_type_id = 'gold_special', seller_custom_field, attributes, sale_terms, description, local_pick_up, free_shipping }) => {
       const { siteId } = getConfig()
+
+      const pics = (pictures && pictures.length ? pictures : picture_url ? [picture_url] : [])
+      if (!pics.length) {
+        return {
+          content: [{ type: 'text' as const, text: 'Error: hace falta al menos una imagen (picture_url o pictures).' }],
+          isError: true,
+        }
+      }
 
       const body: Record<string, unknown> = {
         title,
@@ -272,14 +293,35 @@ export function registerCreateItem(server: McpServer) {
         buying_mode: 'buy_it_now',
         listing_type_id,
         condition,
-        pictures: [{ source: picture_url }],
+        pictures: pics.map((source) => ({ source })),
       }
       if (seller_custom_field) body.seller_custom_field = seller_custom_field
+      if (attributes?.length) body.attributes = attributes
+      if (sale_terms?.length) body.sale_terms = sale_terms
+      if (local_pick_up !== undefined || free_shipping !== undefined) {
+        body.shipping = {
+          ...(local_pick_up !== undefined ? { local_pick_up } : {}),
+          ...(free_shipping !== undefined ? { free_shipping } : {}),
+        }
+      }
 
       const created = await mlFetch<{ id: string; permalink: string; status: string }>('/items', {
         method: 'POST',
         body,
       })
+
+      let descNote = ''
+      if (description) {
+        try {
+          await mlFetch(`/items/${created.id}/description`, {
+            method: 'POST',
+            body: { plain_text: description },
+          })
+          descNote = '\n  Descripción: cargada.'
+        } catch (e) {
+          descNote = `\n  ⚠ Descripción NO cargada: ${(e as Error).message}`
+        }
+      }
 
       return {
         content: [{
@@ -287,7 +329,7 @@ export function registerCreateItem(server: McpServer) {
           text: `Publicación creada:\n` +
             `  ID: ${created.id}\n` +
             `  Estado: ${created.status}\n` +
-            `  Link: ${created.permalink}`,
+            `  Link: ${created.permalink}` + descNote,
         }],
       }
     }

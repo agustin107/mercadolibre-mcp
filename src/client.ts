@@ -59,7 +59,9 @@ export async function mlFetch<T>(
       if (!response.ok) {
         const errorData = await response.json().catch(() => null) as MLError | null
         const errorMsg = errorData?.message || errorData?.error || `HTTP ${response.status}`
-        const cause = errorData?.cause?.join(', ') || ''
+        const cause = errorData?.cause
+          ?.map((c: unknown) => (typeof c === 'string' ? c : JSON.stringify(c)))
+          .join('; ') || ''
 
         // Token expirado: limpiar cache y reintentar
         if (response.status === 401 && attempt < MAX_RETRIES) {

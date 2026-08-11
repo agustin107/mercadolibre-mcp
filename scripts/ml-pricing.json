@@ -1,0 +1,8 @@
+{
+  "source": "~/Documents/Claude/Projects/kitmaq/KitMaq_markup_MeLi_astroselling.xlsx",
+  "scenario": "Premium + 3 cuotas sin interés (markup plano KitMaq)",
+  "markup_pct": 37.1,
+  "multiplier": 1.371,
+  "round_to": 100,
+  "notes": "Corroborado vs publicaciones ML activas (ej. P20 TN $65.000 → ML $89.115 ≈ +37,1%). El Excel también define markups por rango si se ofrece envío gratis con costo fijo; usar tiered solo si ML_USE_TIERED_MARKUP=1."
+}

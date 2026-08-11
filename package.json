@@ -1,6 +1,6 @@
 {
 	"name": "@agustin107/mercadolibre-mcp",
-	"version": "2.5.0",
+	"version": "2.6.0",
 	"description": "MCP server operativo para Mercado Libre — 40 tools de seller operations. Auto-refresh OAuth integrado (sin renovación manual de tokens).",
 	"license": "MIT",
 	"type": "module",

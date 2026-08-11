@@ -2,6 +2,12 @@
 
 Todas las versiones de `@traid/mercadolibre-mcp-read` en orden inverso.
 
+## [2.6.0] — 2026-08-11
+
+### Changed
+- `create_item` ampliado: ahora acepta `attributes` (BRAND, MODEL, etc. — obligatorios en la mayoría de las categorías), `pictures` (múltiples fotos), `sale_terms` (garantía), `description` (se carga en un 2do paso vía POST /items/{id}/description) y `shipping` básico (`local_pick_up`, `free_shipping`). Antes el POST mínimo fallaba con "Validation error" en categorías con atributos requeridos.
+- `mlFetch`: los errores de validación de ML ahora muestran el detalle real de `cause` (antes salía "[object Object]").
+
 ## [1.0.0] — 2026-04-17
 
 ### Added
