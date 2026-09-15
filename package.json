@@ -1,7 +1,7 @@
 {
-  "name": "@nahuelalbornoz/mercadolibre-mcp",
-  "version": "1.2.0-alpha.2",
-  "description": "Mercado Libre MCP server for Claude Code, Cursor and AI agents: seller API tools for products, orders, price/stock, questions, ads and reputation (write-back) + official MCP proxy + Supabase token store + TRAID knowledge tools.",
+  "name": "@agustin107/mercadolibre-mcp",
+  "version": "2.7.0",
+  "description": "MCP server operativo para Mercado Libre — tools de seller + TRAID Hub (knowledge, proxy oficial, token-store Supabase). Auto-refresh OAuth integrado.",
   "license": "MIT",
   "type": "module",
   "main": "dist/index.js",
@@ -14,15 +14,18 @@
     "README.md",
     "LICENSE",
     "SKILL.md",
-    "CHANGELOG.md"
+    "CHANGELOG.md",
+    "references",
+    "SPEC.md"
   ],
   "scripts": {
     "build": "tsc",
     "build:knowledge": "python ../CONOCIMIENTO-NAHUEL/scripts/build_knowledge_snapshot.py --knowledge-root ../CONOCIMIENTO-NAHUEL --output ./data/knowledge.json",
     "dev": "tsx src/index.ts",
     "start": "node dist/index.js",
-    "test": "tsx --test test/**/*.test.ts",
-    "prepublishOnly": "npm run build:knowledge && npm run build"
+    "mcp": "bash scripts/run-mcp.sh",
+    "test": "tsx --test test/**/*.test.ts tests/**/*.test.ts",
+    "prepublishOnly": "npm run build"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.27.1",
@@ -62,13 +65,13 @@
     "traid",
     "context-engineering"
   ],
-  "author": "TRAID Agency <contacto@traid.agency>",
+  "author": "Axionline <info@axionline.com>",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/MarcosNahuel/mercadolibre-mcp.git"
+    "url": "git+https://github.com/agustin107/mercadolibre-mcp.git"
   },
   "bugs": {
-    "url": "https://github.com/MarcosNahuel/mercadolibre-mcp/issues"
+    "url": "https://github.com/agustin107/mercadolibre-mcp/issues"
   },
-  "homepage": "https://github.com/MarcosNahuel/mercadolibre-mcp#readme"
+  "homepage": "https://github.com/agustin107/mercadolibre-mcp#readme"
 }

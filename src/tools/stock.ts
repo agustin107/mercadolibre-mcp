@@ -12,14 +12,12 @@ export function registerUpdateStock(server: McpServer) {
       quantity: z.number().int().min(0).describe('Nueva cantidad disponible'),
     },
     async ({ item_id, quantity }) => {
-      // Obtener stock actual
       const current = await mlFetch<MLProduct>(`/items/${item_id}`, {
         params: { attributes: 'id,title,available_quantity' },
       })
 
       const previousStock = current.available_quantity
 
-      // Actualizar stock
       await mlFetch<MLProduct>(`/items/${item_id}`, {
         method: 'PUT',
         body: { available_quantity: quantity },

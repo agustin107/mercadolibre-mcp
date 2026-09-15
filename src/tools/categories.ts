@@ -4,6 +4,52 @@ import { mlFetch } from '../client.js'
 import { getConfig } from '../auth.js'
 import type { MLCategory } from '../types.js'
 
+export function registerGetCategoryAttributes(server: McpServer) {
+  server.tool(
+    'get_category_attributes',
+    'Devuelve TODOS los atributos de una categoría con su id exacto, tipo de valor, si es requerido, unidades permitidas y los valores de lista con su value_id. Usar antes de update_attributes para conocer el id del atributo y el value_id/valor válido a enviar. Admite filtro por texto para acotar la salida.',
+    {
+      category_id: z.string().describe('ID de categoría (ej: MLA5232)'),
+      filter: z.string().optional()
+        .describe('Opcional: devuelve solo atributos cuyo id o nombre contengan este texto (case-insensitive).'),
+    },
+    async ({ category_id, filter }) => {
+      const attributes = await mlFetch<Array<{
+        id: string
+        name: string
+        value_type: string
+        tags?: Record<string, unknown>
+        allowed_units?: Array<{ id: string; name: string }>
+        values?: Array<{ id: string; name: string }>
+      }>>(`/categories/${category_id}/attributes`)
+
+      let list = attributes
+      if (filter) {
+        const f = filter.toLowerCase()
+        list = attributes.filter(a =>
+          a.id.toLowerCase().includes(f) || a.name.toLowerCase().includes(f))
+      }
+
+      const simplified = list.map(a => ({
+        id: a.id,
+        name: a.name,
+        value_type: a.value_type,
+        required: a.tags?.required === true ? true : undefined,
+        allowed_units: a.allowed_units?.map(u => u.id),
+        values: a.values?.map(v => ({ id: v.id, name: v.name })),
+      }))
+
+      return {
+        content: [{
+          type: 'text' as const,
+          text: `Atributos de ${category_id} (${simplified.length}${filter ? `, filtro "${filter}"` : ''}):\n\n` +
+            JSON.stringify(simplified, null, 2),
+        }],
+      }
+    }
+  )
+}
+
 export function registerGetCategories(server: McpServer) {
   server.tool(
     'get_categories',

@@ -28,7 +28,6 @@ export async function mlFetch<T>(
 ): Promise<T> {
   const { method = 'GET', body, params } = options
 
-  // Construir URL con query params
   let url = `${ML_API_BASE}${path}`
   if (params) {
     const searchParams = new URLSearchParams()
@@ -56,7 +55,6 @@ export async function mlFetch<T>(
         ...(body ? { body: JSON.stringify(body) } : {}),
       })
 
-      // Rate limit: esperar y reintentar
       if (response.status === 429) {
         const retryAfter = response.headers.get('retry-after')
         const waitMs = retryAfter ? parseInt(retryAfter) * 1000 : RETRY_DELAY_MS * (attempt + 1)
@@ -68,9 +66,10 @@ export async function mlFetch<T>(
       if (!response.ok) {
         const errorData = await response.json().catch(() => null) as MLError | null
         const errorMsg = errorData?.message || errorData?.error || `HTTP ${response.status}`
-        const cause = errorData?.cause?.join(', ') || ''
+        const cause = errorData?.cause
+          ?.map((c: unknown) => (typeof c === 'string' ? c : JSON.stringify(c)))
+          .join('; ') || ''
 
-        // Token expirado: limpiar cache y reintentar
         if (response.status === 401 && attempt < MAX_RETRIES) {
           const { clearTokenCache } = await import('./auth.js')
           clearTokenCache()
@@ -96,11 +95,9 @@ export async function mlFetch<T>(
   throw lastError || new Error('Error inesperado en mlFetch')
 }
 
-// Fetch múltiple con batching (ML soporta multi-get en /items)
 export async function mlMultiGet<T>(ids: string[], path: string): Promise<T[]> {
   if (ids.length === 0) return []
 
-  // ML permite hasta 20 items por multi-get
   const BATCH_SIZE = 20
   const results: T[] = []
 

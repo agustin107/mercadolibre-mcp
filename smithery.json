@@ -1,8 +1,8 @@
 {
-  "qualifiedName": "@nahuelalbornoz/mercadolibre-mcp",
+  "qualifiedName": "@agustin107/mercadolibre-mcp",
   "displayName": "Mercado Libre MCP Server",
   "description": "Mercado Libre MCP server for Claude Code, Cursor and AI agents — seller API tools for products, orders, pricing, stock, questions, ads, reputation and competitor analysis (write-back), official MCP proxy, Supabase multi-tenant token store, and TRAID knowledge tools",
-  "homepage": "https://github.com/MarcosNahuel/mercadolibre-mcp",
+  "homepage": "https://github.com/agustin107/mercadolibre-mcp",
   "iconUrl": "https://http2.mlstatic.com/frontend-assets/ml-web-navigation/ui-navigation/6.6.73/mercadolibre/logo_large_25years@2x.png",
   "connections": [
     {

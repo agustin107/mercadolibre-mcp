@@ -7,7 +7,6 @@ export function registerManageAds(server: McpServer) {
     'manage_ads',
     'Gestiona Product Ads de Mercado Libre: activar, pausar o consultar estado de publicidad de un item.',
     {
-      seller_id: z.string().describe('ID numérico del vendedor'),
       item_id: z.string().describe('ID de la publicación (ej: MLA1234567890)'),
       action: z.enum(['status', 'activate', 'pause']).describe(
         'Acción: "status" consulta el estado actual, "activate" activa publicidad, "pause" la pausa'
@@ -15,9 +14,8 @@ export function registerManageAds(server: McpServer) {
       daily_budget: z.number().positive().optional()
         .describe('Presupuesto diario en moneda local (solo para activate)'),
     },
-    async ({ seller_id, item_id, action, daily_budget }) => {
+    async ({ item_id, action, daily_budget }) => {
       if (action === 'status') {
-        // Consultar estado actual del ad
         try {
           const adData = await mlFetch<{
             id: string
@@ -67,7 +65,6 @@ export function registerManageAds(server: McpServer) {
         }
       }
 
-      // pause
       await mlFetch(`/advertising/product_ads/${item_id}`, {
         method: 'PUT',
         body: { status: 'paused' },

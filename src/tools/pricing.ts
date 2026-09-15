@@ -12,14 +12,12 @@ export function registerUpdatePrice(server: McpServer) {
       price: z.number().positive().describe('Nuevo precio en la moneda de la publicación'),
     },
     async ({ item_id, price }) => {
-      // Obtener precio actual antes de cambiar
       const current = await mlFetch<MLProduct>(`/items/${item_id}`, {
         params: { attributes: 'id,title,price,currency_id' },
       })
 
       const previousPrice = current.price
 
-      // Actualizar precio
       await mlFetch<MLProduct>(`/items/${item_id}`, {
         method: 'PUT',
         body: { price },
