@@ -101,27 +101,74 @@ export function registerSendMessage(server: McpServer) {
       seller_id: z.string().describe('ID numérico del vendedor'),
       text: z.string().min(1).max(3500).describe('Texto del mensaje'),
       pack_id: z.number().optional().describe('ID del pack de mensajes'),
-      order_id: z.number().optional().describe('ID de la orden (resuelve pack_id automáticamente)'),
+      order_id: z.number().optional().describe('ID de la orden (resuelve pack_id y buyer_id automáticamente)'),
+      buyer_id: z.number().optional().describe('ID numérico del comprador (se resuelve solo si se pasa order_id)'),
     },
-    async ({ seller_id, text, pack_id, order_id }) => {
+    async ({ seller_id, text, pack_id, order_id, buyer_id }) => {
       let resolvedPackId = pack_id
-      if (!resolvedPackId && order_id) {
-        resolvedPackId = (await resolvePackId(order_id, seller_id)) ?? undefined
+      let resolvedBuyerId = buyer_id
+      if (order_id && (!resolvedPackId || !resolvedBuyerId)) {
+        const order = await mlFetch<{ pack_id?: number; buyer?: { id: number } }>(`/orders/${order_id}`)
+        if (!resolvedPackId) {
+          resolvedPackId = order.pack_id ?? (await resolvePackId(order_id, seller_id)) ?? undefined
+        }
+        if (!resolvedBuyerId) resolvedBuyerId = order.buyer?.id
       }
       if (!resolvedPackId) {
         return {
           content: [{ type: 'text' as const, text: 'No se pudo resolver pack_id. Indicá pack_id o order_id con mensajes activos.' }],
         }
       }
-
-      await mlFetch(
-        `/messages/packs/${resolvedPackId}/sellers/${seller_id}`,
-        {
-          method: 'POST',
-          params: { tag: 'post_sale' },
-          body: { text },
+      if (!resolvedBuyerId) {
+        return {
+          content: [{ type: 'text' as const, text: 'No se pudo resolver buyer_id. Indicá buyer_id o pasá order_id para resolverlo automáticamente.' }],
         }
-      )
+      }
+
+      try {
+        await mlFetch(
+          `/messages/packs/${resolvedPackId}/sellers/${seller_id}`,
+          {
+            method: 'POST',
+            params: { tag: 'post_sale' },
+            body: {
+              from: { user_id: Number(seller_id) },
+              to: { user_id: resolvedBuyerId },
+              text,
+            },
+          }
+        )
+      } catch (error) {
+        const msg = (error as Error).message
+        // ME2: el vendedor no puede iniciar conversación con texto libre directo.
+        // Fallback: action_guide con option OTHER (texto libre, máx 350 chars, cap 1).
+        if (msg.includes('conversation_initiated_by_seller_limited')) {
+          if (text.length > 350) {
+            return {
+              content: [{
+                type: 'text' as const,
+                text: `El comprador aún no escribió: ML exige iniciar por action_guide (opción OTHER), que acepta máx 350 caracteres. Tu mensaje tiene ${text.length}. Acortalo y reintentá.`,
+              }],
+            }
+          }
+          await mlFetch(
+            `/messages/action_guide/packs/${resolvedPackId}/option`,
+            {
+              method: 'POST',
+              params: { tag: 'post_sale' },
+              body: { option_id: 'OTHER', text },
+            }
+          )
+          return {
+            content: [{
+              type: 'text' as const,
+              text: `Mensaje enviado en pack #${resolvedPackId} vía action_guide (opción OTHER — conversación iniciada por el vendedor; cap 1 hasta que el comprador responda).\n` +
+                `Texto: "${text.substring(0, 100)}${text.length > 100 ? '...' : ''}"`,
+            }],
+          }
+        }
+        throw error
+      }
 
       return {
         content: [{
