@@ -1,7 +1,7 @@
 ---
 name: mercadolibre-mcp
-description: Operaciones diarias de seller en Mercado Libre / Meli / MercadoLibre — 36 MCP tools de lectura, escritura y analytics (publicaciones, precio, stock, órdenes, envíos, tracking, mensajes post-venta, preguntas, Product Ads, reputación, competencia, categorías, revenue, inventario, demanda). Usá esta skill siempre que el usuario mencione Mercado Libre, Meli, publicaciones MLA/MLM/MLB, seller_id, órdenes ML, preguntas sin responder, health de items, comparar con TiendaNube, sincronizar catálogo TN↔ML, o quiera actualizar precio/stock/responder compradores/cargar tracking. ⛔ REGLA ABSOLUTA: NUNCA pedir refresh manual de tokens — el MCP server auto-renueva access_token (single-flight + persistencia en .env.local). Prohibido sugerir curl/cron/n8n para tokens. Única excepción: `invalid_grant` → re-OAuth inicial, no refresh manual.
-version: 2.0.0
+description: Operaciones diarias de seller en Mercado Libre / Meli / MercadoLibre — 40 MCP tools ML (publicaciones, precio, stock, atributos, órdenes, envíos, tracking, mensajes, preguntas, ads, reputación, competencia, categorías, revenue, inventario, demanda) + TRAID knowledge + proxy official_*. Usá esta skill cuando el usuario mencione Mercado Libre, Meli, publicaciones MLA/MLM/MLB, seller_id, órdenes ML, preguntas sin responder, health de items, comparar con TiendaNube, sync TN↔ML, o quiera actualizar precio/stock/atributos/responder compradores/cargar tracking. ⛔ NUNCA pedir refresh manual de tokens — el server auto-renueva (single-flight, .env.local, lease Supabase). Única excepción: invalid_grant → re-OAuth inicial.
+version: 2.7.0
 metadata:
   openclaw:
     requires:
@@ -18,7 +18,7 @@ metadata:
 
 # Mercado Libre MCP (operativo)
 
-36 tools para operatoria diaria del seller. Nombres alineados con [tiendanube-mcp](https://github.com/MarcosNahuel/tiendanube-mcp) para sync cross-platform.
+v2.7.0 — 40 tools ML de operatoria diaria + 2 TRAID + proxy `official_*`. Nombres alineados con [tiendanube-mcp](https://github.com/MarcosNahuel/tiendanube-mcp) para sync cross-platform.
 
 ---
 
@@ -34,9 +34,10 @@ metadata:
 
 El MCP server hace todo solo:
 
-- Detecta expiración / `401` y refresca con `ML_REFRESH_TOKEN`
+- Detecta expiración / `401` y refresca con `ML_REFRESH_TOKEN` (salta `ML_ACCESS_TOKEN` stale)
 - **Single-flight**: un solo refresh aunque haya muchas tools en paralelo
 - Persiste tokens rotados en `.env.local` vía `ML_ENV_FILE`
+- Con Supabase: lease CAS cross-proceso (`ML_AUTH_MODE=standalone` fuerza auto-refresh)
 - Los tokens **nunca se loguean**
 
 **Única excepción:** `invalid_grant` persistente → el OAuth inicial está roto; guiá al [flujo OAuth completo](./docs/CONFIGURACION-MERCADOLIBRE-DEVELOPERS.md#paso-3--obtener-el-refresh-token-flujo-oauth), **no** a un refresh manual.
@@ -54,7 +55,7 @@ Si una tool falla con auth: **reintentá la tool** o diagnosticá config/scopes.
 | `seller_id` | `user_id` del OAuth o `GET /users/me` — casi todas las tools lo piden |
 | `item_id` | `list_products`, `get_item_by_sku(seller_id, sku)` o respuesta previa |
 | `order_id` | `list_orders` → `get_order` para `pack_id` (mensajes post-venta) |
-| `category_id` | `get_categories(site_id)` o `domain_discovery` antes de `create_item` |
+| `category_id` | `get_categories` / predictor; `get_category_attributes` antes de `create_item` o `update_attributes` |
 
 Si el usuario no da `seller_id`, intentá inferirlo del token/config antes de pedirlo.
 
@@ -63,11 +64,14 @@ Si el usuario no da `seller_id`, intentá inferirlo del token/config antes de pe
 | Intención del usuario | Tool(s) |
 |---|---|
 | Ver catálogo activo | `list_products` → `get_item` para detalle |
+| Solo descripción | `get_item_description` |
 | Buscar por SKU interno | `get_item_by_sku` |
 | Cambiar precio o stock | `update_price` / `update_stock` (confirman antes→después) |
 | Cambiar varios campos | `update_item` |
+| Atributos de ficha | `get_category_attributes` → `update_attributes` |
+| Garantía / sale_terms | `update_sale_terms` |
 | Muchos items | `batch_update_stock_price` (máx 50, secuencial) |
-| Nueva publicación | `get_categories` → `create_item` (**confirmar antes**) |
+| Nueva publicación | `get_categories` → `get_category_attributes` → `create_item` (**confirmar antes**) |
 | Pausar/cerrar | `close_item` (**confirmar antes**) |
 | Ventas / ingresos | `get_revenue_summary`, `get_sales_by_period`, `get_orders_dashboard` |
 | Stock bajo / quiebre | `get_inventory_alerts`, `stockout_risk` |
@@ -75,6 +79,8 @@ Si el usuario no da `seller_id`, intentá inferirlo del token/config antes de pe
 | Post-venta | `list_message_threads` → `get_message_thread` → `send_message` |
 | Preguntas pre-venta | `list_questions` → `answer_question` |
 | Envío | `list_shipments(order_id)` → `update_shipment_tracking` |
+| Knowledge TRAID | `traid_feature_lookup`, `traid_client_context` |
+| Docs oficiales ML | tools `official_*` (proxy al MCP de Mercado Libre) |
 | Sync TN↔ML | Matchear por SKU (`seller_custom_field` en ML = SKU TN); comparar descripción, imgs, atributos, marca |
 
 Preferí `list_orders` sobre `get_orders` (alias legacy).
@@ -85,7 +91,7 @@ Ver banner **⛔ NO REFRESH MANUAL** arriba. Resumen:
 
 - El MCP renueva `access_token` con `ML_REFRESH_TOKEN` — **sin intervención humana ni del agente**
 - Persiste rotaciones en `.env.local` vía `ML_ENV_FILE`
-- Single-flight evita doble refresh
+- Single-flight evita doble refresh; lease CAS si hay Supabase
 
 Detalle: [references/oauth-setup.md](./references/oauth-setup.md). OAuth inicial (una sola vez): [docs/CONFIGURACION-MERCADOLIBRE-DEVELOPERS.md](./docs/CONFIGURACION-MERCADOLIBRE-DEVELOPERS.md).
 
@@ -95,17 +101,20 @@ Detalle: [references/oauth-setup.md](./references/oauth-setup.md). OAuth inicial
 | `401` transitorio | Reintentar; el server refresca solo | Pedir nuevo access token |
 | `invalid_grant` persistente | Guiar re-OAuth inicial | curl refresh, cron, n8n |
 
-## Tools (36)
+## Tools (40 ML + 2 TRAID)
 
-### Productos (9)
+### Productos (12)
 
 | Tool | Tipo | Input principal |
 |---|---|---|
 | `list_products` | Lectura | seller_id, status, limit |
 | `get_item` | Lectura | item_id |
+| `get_item_description` | Lectura | item_id |
 | `get_item_by_sku` | Lectura | seller_id, sku |
 | `update_item` | Escritura | item_id, title, price, stock, status, sku |
-| `create_item` | Escritura | title, category_id, price, stock, picture_url |
+| `update_attributes` | Escritura | item_id, attributes[] |
+| `update_sale_terms` | Escritura | item_id, sale_terms[] |
+| `create_item` | Escritura | title, category_id, price, stock, pictures/attributes/sale_terms/description |
 | `close_item` | Escritura | item_id, action (pause/close) |
 | `batch_update_stock_price` | Escritura | updates[] (hasta 50) |
 | `update_price` | Escritura | item_id, price |
@@ -143,12 +152,12 @@ Detalle: [references/oauth-setup.md](./references/oauth-setup.md). OAuth inicial
 | `get_orders_dashboard` | Lectura | seller_id, days |
 | `get_inventory_alerts` | Lectura | seller_id, threshold |
 | `get_pending_payments` | Lectura | seller_id, hours |
-| `price_to_win` | Lectura | seller_id, item_id |
-| `price_history` | Lectura | seller_id, item_id, days |
-| `stockout_risk` | Lectura | seller_id, days, limit |
+| `price_to_win` | Lectura | item_id |
+| `price_history` | Lectura | item_id, days |
+| `stockout_risk` | Lectura | seller_id?, window_days, limit |
 | `forecast_demand` | Lectura | seller_id, item_id, days |
 
-### Otros (5)
+### Otros (6)
 
 | Tool | Tipo | Input principal |
 |---|---|---|
@@ -156,7 +165,17 @@ Detalle: [references/oauth-setup.md](./references/oauth-setup.md). OAuth inicial
 | `manage_ads` | Escritura | item_id, action |
 | `get_reputation` | Lectura | seller_id |
 | `search_competitors` | Lectura | query, site_id |
-| `get_categories` | Lectura | site_id, category_id |
+| `get_categories` | Lectura | category_id o query |
+| `get_category_attributes` | Lectura | category_id, filter? |
+
+### TRAID (2)
+
+| Tool | Tipo | Input principal |
+|---|---|---|
+| `traid_feature_lookup` | Lectura | query, limit, category |
+| `traid_client_context` | Lectura | slug? (o `TRAID_CLIENT_SLUG`) |
+
+Capa 0: tools `official_*` re-exportadas del MCP oficial de ML al boot (opt-out `ML_SKIP_UPSTREAM_PROXY=1`).
 
 ## Ejemplos
 
@@ -169,6 +188,9 @@ User: "stock del SKU I140-6-220 a 10"
 
 User: "ingresos del mes y productos con stock bajo"
 → get_revenue_summary({ days: 30 }) + get_inventory_alerts({ threshold: 5 })
+
+User: "completá atributos de ficha de MLA…"
+→ get_item → get_category_attributes → update_attributes
 
 User: "compará TN vs ML por SKU"
 → list_products + tiendanube list_products → matchear SKU → gap analysis
@@ -189,7 +211,9 @@ Confirmar antes de: `create_item`, bulk >10 items, `close_item` en activas.
 
 Nunca: loguear tokens, eliminar órdenes, modificar datos de compradores, **pedir refresh manual de tokens**, sugerir curl/cron/n8n para auth.
 
+`tool-guard` bloquea al boot tools de compra/borrado (`buy_*`, `delete`, `cancel`, `refund`, etc.).
+
 ## Otros MCPs
 
-- `mercadolibre/mercadolibre-mcp-server` → solo docs, no seller ops
+- `mercadolibre/mercadolibre-mcp-server` → solo docs, no seller ops (este paquete lo proxea como `official_*`)
 - `tiendanube-mcp` → paridad de nombres para sync TN↔ML
