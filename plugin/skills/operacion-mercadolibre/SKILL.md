@@ -1,11 +1,34 @@
 ---
 name: operacion-mercadolibre
-description: Referencia para operar la cuenta de MercadoLibre de KitMaq a traves del server MCP "mercadolibre" (36 tools de lectura, escritura y analytics). Usar cuando se pida listar o editar publicaciones, precio o stock; gestionar ordenes, envios y tracking; responder preguntas o mensajes post-venta; ver reputacion, competencia o metricas de ventas; o sincronizar catalogo entre TiendaNube y MercadoLibre. Indica que tool invocar para cada tarea, el modelo de pricing MeLi de KitMaq y las reglas de marca que aplican a todo el contenido de cara al cliente.
+description: Referencia para operar la cuenta de MercadoLibre de KitMaq a traves del server MCP "mercadolibre" (40 tools de lectura, escritura y analytics). Usar cuando se pida ver publicaciones, ventas, ordenes, envios, reputacion, competencia o metricas; responder preguntas o mensajes post-venta; cargar tracking; o cuando se pida cambiar precio, stock, publicaciones o fichas en MercadoLibre (eso se hace en el sistema interno de KitMaq, no aca). Indica que tool invocar para cada tarea, a donde mandar los cambios del motor y las reglas de marca que aplican a todo el contenido de cara al cliente.
 ---
 
 # Operar MercadoLibre (KitMaq)
 
-El server MCP `mercadolibre` expone **36 tools** contra la API de MercadoLibre de la cuenta de KitMaq (site `MLA`, Argentina). Corre en modo stdio via `run-mcp.sh` y auto-renueva el token. Esta skill dice que tool usar para cada tarea, el pricing MeLi de KitMaq y que reglas respetar.
+El server MCP `mercadolibre` expone **40 tools** contra la API de MercadoLibre de la cuenta de KitMaq (site `MLA`, Argentina). Corre en modo stdio via `run-mcp.sh` y auto-renueva el token. Esta skill dice que tool usar para cada tarea, que cambios van al sistema interno y que reglas respetar.
+
+## ⛔ Precio, stock, publicaciones y fichas: en el sistema interno, no acá
+
+El **sistema interno de KitMaq** (conector `kitmaq-internal`) es la fuente de verdad de costos, precios (L1 mostrador/web, L2 revendedor, L3 MercadoLibre), stock por depósito, fichas y SKUs. Un **runner** programado es el único que escribe en MercadoLibre: precios, stock, altas de publicaciones y contenido, con vista previa, OK de una persona y tope por corrida. Si se cambia algo de eso desde acá, MercadoLibre queda distinto del motor y el runner lo pisa (o no) en la corrida siguiente.
+
+Por eso, salvo que `KITMAQ_ESCRITURAS_MOTOR=permitir`, estas tools **se niegan** y devuelven a dónde ir: `update_price`, `update_stock`, `batch_update_stock_price`, `update_item`, `create_item`, `close_item`, `update_attributes`. No insistas ni busques otra tool que haga lo mismo.
+
+| Pedido | Dónde se hace |
+|---|---|
+| Precio de uno o varios productos | Proponerlo en el sistema interno (ver «Cambios de precio» abajo) |
+| Stock | En POSBerry; el runner lo lleva a MercadoLibre |
+| Publicar un producto nuevo | «Altas en MercadoLibre» (`/precios/mercadolibre`): motivos, OK y tope por corrida |
+| Título, descripción, atributos, fotos | La ficha en el sistema interno (`/precios/fichas`, `/precios/mercadolibre/datos`); se aprueba ahí |
+| Pausar o cerrar una publicación | Consultarlo en el sistema interno antes de tocar el canal |
+
+### Cambios de precio (ej. «subí 5 % las soldadoras»)
+
+1. Leer en el sistema interno: `ver_precios` (con `buscar`) para ver los SKUs, su costo, el origen de cada lista y el vigente. Con `get_item_by_sku` / `price_to_win` / `search_competitors` de este server podés sumar contexto del canal.
+2. El motor no tiene una regla por categoría. Para un grupo de productos, proponé un **precio fijo por SKU** con `cambiar_precio_fijo` (L1 y/o L3) **con `confirmar=false`**: devuelve la vista previa de qué precios cambiarían, sin guardar nada. Mostrásela a la persona. Ojo: el precio fijo queda puesto a mano y no sigue al costo; decilo. Además `cambiar_precio_fijo` reemplaza **todo** el precio fijo del SKU: lo que no mandes deja de estar fijo. Antes, mirá con `ver_precios` qué valores fijos tiene y reenviá los que tienen que quedar. Si lo que cambia es el criterio para todo el canal (markup o comisiones de L3), es `cambiar_parametros_precios` con vista previa, y eso mueve todos los productos.
+3. Con el OK de la persona, `confirmar=true`: el cambio queda en la **propuesta pendiente**, no en el canal.
+4. La propuesta se aprueba con `aprobar_propuesta_precios` (vista previa → `confirmar=true` con el `propuestaId` que se vio) o en `/precios/propuesta`. Recién ahí el runner la lleva a MercadoLibre (L3) y a Tienda Nube (L1).
+
+Las herramientas de escritura del sistema interno piden el conector de una persona de KitMaq con escritura. Si no están disponibles, explicá el cambio y mandá a la pantalla de `/precios`.
 
 ## ⛔ Tokens: NO refrescar manualmente
 
@@ -29,12 +52,9 @@ En MercadoLibre el SKU interno de KitMaq viaja en `seller_custom_field`; sirve p
 - `list_products` — listar publicaciones (filtros: `status`, `limit`). Base para casi todo.
 - `get_item` — detalle de una publicación por `item_id`.
 - `get_item_by_sku` — buscar publicación por SKU interno.
-- `update_item` — editar varios campos (título, precio, stock, status, sku). Escritura.
-- `create_item` — nueva publicación. Escritura. **Confirmar antes.**
-- `close_item` — pausar o cerrar (`action: pause|close`). Escritura. **Confirmar antes** si está activa.
-- `update_price` — cambiar solo precio de una publicación. Escritura.
-- `update_stock` — cambiar solo stock (`available_quantity`). Escritura.
-- `batch_update_stock_price` — actualizar precio y/o stock de muchas publicaciones (hasta 50, secuencial). **Ideal para sincronizar precios desde el tracker.** Escritura.
+- `get_item_description` — descripción de una publicación.
+- `update_item`, `create_item`, `close_item`, `update_price`, `update_stock`, `batch_update_stock_price`, `update_attributes` — **del motor: se niegan** (ver arriba).
+- `update_sale_terms` — garantía y otros términos de venta. Escritura, abierta. **Confirmar antes.**
 
 ### Preguntas y mensajes
 
@@ -72,20 +92,20 @@ En MercadoLibre el SKU interno de KitMaq viaja en `seller_custom_field`; sirve p
 - `manage_ads` — Product Ads de un item (`action`). Escritura.
 - `get_reputation` — reputación del seller (color, métricas, reclamos).
 - `search_competitors` — buscar publicaciones de la competencia por query.
-- `get_categories` — árbol/predicción de categorías de MeLi.
+- `get_categories` / `get_category_attributes` — árbol/predicción de categorías de MeLi y sus atributos.
 
 ## Patrones comunes
 
-- **Cambiar precio/stock de un item**: `get_item_by_sku` o `list_products` → mostrar valor actual → `update_price` / `update_stock` (mostrar antes/después) → confirmar.
-- **Sincronizar precios desde el tracker**: armar el lote y usar `batch_update_stock_price` (hasta 50 por llamada).
+- **Cambiar precio/stock de un item**: no se hace acá. Mostrar el valor actual (`get_item_by_sku`) y seguir «Cambios de precio» arriba; el stock se corrige en POSBerry.
 - **Responder compradores**: pre-venta `list_questions(status=UNANSWERED)` → `answer_question`; post-venta `list_message_threads` → `get_message_thread` → `send_message`.
 - **Despachar**: `get_order` → `list_shipments` → `update_shipment_tracking`.
 - **Reporte de ventas**: `get_revenue_summary` / `get_sales_by_period` / `get_orders_dashboard`; detalle puntual `list_orders` → `get_order`.
-- **Sync TN↔ML**: matchear por SKU (`seller_custom_field` en ML = SKU en TiendaNube); comparar precio, descripción, imágenes, atributos y marca.
+- **Comparar TN↔ML**: matchear por SKU (`seller_custom_field` en ML = SKU en TiendaNube) para encontrar diferencias. Lo que haya que corregir se corrige en el sistema interno; para ver qué falta en cada canal y por qué, `ver_faltantes_canal` del sistema interno.
 
 ## Reglas de operación
 
-- **Escrituras siempre confirmadas**: cualquier tool de crear/editar/cerrar/enviar modifica la cuenta en vivo. Mostrar el cambio propuesto y esperar el OK. Extra cuidado con `create_item`, bulk >10 items y `close_item` sobre publicaciones activas.
+- **Escrituras siempre confirmadas**: las que siguen abiertas (`answer_question`, `send_message`, `update_shipment_tracking`, `update_sale_terms`, `manage_ads`) modifican la cuenta en vivo. Mostrar el cambio propuesto y esperar el OK.
+- **No esquivar el candado**: si una tool del motor se niega, el cambio va al sistema interno. No pedir que se prenda `KITMAQ_ESCRITURAS_MOTOR` para resolver un pedido común.
 - **Paginar lecturas**: usar `limit`/`status`; no volcar el catálogo entero si solo se busca un item.
 - **No inventar datos**: si falta un precio o costo, decirlo. No completar con estimaciones.
 - **Nunca**: loguear tokens, eliminar órdenes, modificar datos de compradores, pedir refresh manual de tokens.
@@ -103,21 +123,6 @@ Valen para títulos y descripciones de publicaciones, respuestas a preguntas, me
 - **Nombres de producto del proveedor** (mayúsculas con códigos): mantenerlos tal cual, no traducir.
 - **Solo máquinas y herramientas**: KitMaq no vende consumibles (alambres, discos, electrodos). No publicarlos.
 
-## Modelo de pricing MeLi (KitMaq)
+## Precios de MercadoLibre
 
-MercadoLibre tiene su **propio markup** distinto al de la web/TiendaNube, porque absorbe la comisión de MeLi y las cuotas sin interés.
-
-**Escenario por defecto — Premium + 3 cuotas sin interés (markup plano):**
-
-```
-Precio MeLi = Precio TiendaNube × 1.371     (markup plano +37,1%)
-Precio Redondeado = MROUND(Precio MeLi, 100)
-```
-
-Referencia real corroborada: P20 TN $65.000 → ML $89.115 ≈ **+37,1%**.
-
-**Escenario alternativo — envío gratis con costo fijo:** el Excel de KitMaq (`KitMaq_markup_MeLi_astroselling.xlsx`) define markups por rango de precio (más alto en productos baratos). Usar los tiers solo si se está trabajando con envío gratis; ante la duda, usar el markup plano de 37,1%.
-
-Al fijar/verificar un precio puntual, mostrar: precio TiendaNube base, markup aplicado y precio MeLi redondeado. Si el parámetro parece desactualizado respecto del tracker maestro, confirmar antes de aplicar.
-
-> El multiplicador 1.371 puede haber cambiado. Ante la duda, confirmar el markup MeLi vigente con el tracker/Excel de KitMaq antes de aplicarlo masivamente.
+El precio de MercadoLibre es la **lista L3** del motor de precios del sistema interno, con sus propios parámetros (markup y comisiones). Esta skill no trae fórmulas: para saber cuánto sale un producto o por qué, `ver_precios` / `historial_precio` en el sistema interno (los parámetros, `ver_parametros_precios`, solo los ve KitMaq). No calcules precios a mano a partir del precio de Tienda Nube ni de planillas viejas.
