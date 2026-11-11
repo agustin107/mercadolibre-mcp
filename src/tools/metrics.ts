@@ -21,7 +21,7 @@ export function registerGetItemMetrics(server: McpServer) {
       const to = date_to || now.toISOString().split('T')[0]
 
       // Obtener datos del item y visitas en paralelo
-      const [itemData, visitsData] = await Promise.all([
+      const [itemData, visitsRaw] = await Promise.all([
         mlFetch<{
           id: string
           title: string
@@ -40,11 +40,18 @@ export function registerGetItemMetrics(server: McpServer) {
             attributes: 'id,title,price,currency_id,available_quantity,sold_quantity,status,health,listing_type_id,catalog_listing,category_id,permalink',
           },
         }),
-        mlFetch<Array<{ date: string; total: number }>>(
+        mlFetch<unknown>(
           `/items/${item_id}/visits/time_window`,
           { params: { last: 30, unit: 'day' } }
-        ).catch(() => [] as Array<{ date: string; total: number }>),
+        ).catch(() => [] as unknown),
       ])
+
+      // /visits/time_window devuelve { total_visits, results: [{date,total}] } (antes era un array plano)
+      const visitsData: Array<{ date: string; total: number }> = Array.isArray(visitsRaw)
+        ? visitsRaw
+        : (Array.isArray((visitsRaw as { results?: unknown })?.results)
+            ? (visitsRaw as { results: Array<{ date: string; total: number }> }).results
+            : [])
 
       const totalVisits = visitsData.reduce((sum, v) => sum + v.total, 0)
       const avgDailyVisits = totalVisits > 0 ? Math.round(totalVisits / visitsData.length) : 0

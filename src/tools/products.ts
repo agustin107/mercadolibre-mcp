@@ -188,7 +188,8 @@ export function registerUpdateItem(server: McpServer) {
     'Actualiza atributos de una publicación: título, precio, stock, estado, descripción o SKU (paridad TN update_product).',
     {
       item_id: z.string().describe('ID de la publicación'),
-      title: z.string().min(1).optional().describe('Nuevo título'),
+      title: z.string().min(1).optional().describe('Nuevo título. OJO: si la publicación tiene family_name (User Product), ML rechaza `title` con BODY_INVALID_FIELDS: usar family_name.'),
+      family_name: z.string().min(1).optional().describe('Nuevo título para publicaciones con User Product (family_name). ML lo replica a todos los ítems de la familia; sólo si no tiene ventas.'),
       price: z.number().positive().optional().describe('Nuevo precio'),
       available_quantity: z.number().int().min(0).optional().describe('Nuevo stock'),
       status: z.enum(['active', 'paused']).optional().describe('Estado de la publicación'),
@@ -198,6 +199,7 @@ export function registerUpdateItem(server: McpServer) {
     async ({ item_id, ...fields }) => {
       const body: Record<string, unknown> = {}
       if (fields.title !== undefined) body.title = fields.title
+      if (fields.family_name !== undefined) body.family_name = fields.family_name
       if (fields.price !== undefined) body.price = fields.price
       if (fields.available_quantity !== undefined) body.available_quantity = fields.available_quantity
       if (fields.status !== undefined) body.status = fields.status
@@ -250,7 +252,8 @@ export function registerCreateItem(server: McpServer) {
     'create_item',
     'Crea una nueva publicación en Mercado Libre (paridad TN create_product). Flujo mínimo: título, categoría, precio, stock, condición, tipo de listado y al menos una foto. Muchas categorías exigen attributes obligatorios (BRAND, MODEL, etc. — consultar get_category_attributes); se pasan en `attributes`. Admite varias fotos, descripción, sale_terms (garantía) y shipping.',
     {
-      title: z.string().min(1).describe('Título de la publicación'),
+      title: z.string().min(1).optional().describe('Título de la publicación (modelo viejo). En cuentas con User Products ML exige family_name y genera el título: si se pasa family_name, title NO se envía.'),
+      family_name: z.string().min(1).optional().describe('Nombre de familia (User Products). ML lo exige en POST /items para esta cuenta (desde sep-2026); de él arma el título. Usar el nombre del motor (≤60, sin comillas).'),
       category_id: z.string().describe('ID de categoría ML (usar get_categories para obtenerlo)'),
       price: z.number().positive().describe('Precio'),
       available_quantity: z.number().int().min(1).describe('Stock inicial'),
@@ -273,7 +276,7 @@ export function registerCreateItem(server: McpServer) {
       local_pick_up: z.boolean().optional().describe('Permitir retiro en persona'),
       free_shipping: z.boolean().optional().describe('Ofrecer envío gratis (si la categoría/precio no lo fuerza, dejar false)'),
     },
-    async ({ title, category_id, price, available_quantity, picture_url, pictures, condition = 'new', listing_type_id = 'gold_special', seller_custom_field, attributes, sale_terms, description, local_pick_up, free_shipping }) => {
+    async ({ title, family_name, category_id, price, available_quantity, picture_url, pictures, condition = 'new', listing_type_id = 'gold_special', seller_custom_field, attributes, sale_terms, description, local_pick_up, free_shipping }) => {
       const { siteId } = getConfig()
 
       const pics = (pictures && pictures.length ? pictures : picture_url ? [picture_url] : [])
@@ -284,8 +287,14 @@ export function registerCreateItem(server: McpServer) {
         }
       }
 
+      if (!title && !family_name) {
+        return {
+          content: [{ type: 'text' as const, text: 'Error: hace falta family_name (User Products) o title.' }],
+          isError: true,
+        }
+      }
       const body: Record<string, unknown> = {
-        title,
+        ...(family_name ? { family_name } : { title }),
         category_id,
         price,
         currency_id: siteId === 'MLA' ? 'ARS' : siteId === 'MLM' ? 'MXN' : siteId === 'MLB' ? 'BRL' : 'USD',
@@ -305,7 +314,7 @@ export function registerCreateItem(server: McpServer) {
         }
       }
 
-      const created = await mlFetch<{ id: string; permalink: string; status: string }>('/items', {
+      const created = await mlFetch<{ id: string; permalink: string; status: string; title?: string; family_name?: string; user_product_id?: string }>('/items', {
         method: 'POST',
         body,
       })
@@ -328,6 +337,8 @@ export function registerCreateItem(server: McpServer) {
           type: 'text' as const,
           text: `Publicación creada:\n` +
             `  ID: ${created.id}\n` +
+            `  Título generado: ${created.title ?? '-'}\n` +
+            `  family_name: ${created.family_name ?? '-'} · user_product_id: ${created.user_product_id ?? '-'}\n` +
             `  Estado: ${created.status}\n` +
             `  Link: ${created.permalink}` + descNote,
         }],

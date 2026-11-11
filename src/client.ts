@@ -66,9 +66,12 @@ export async function mlFetch<T>(
       if (!response.ok) {
         const errorData = await response.json().catch(() => null) as MLError | null
         const errorMsg = errorData?.message || errorData?.error || `HTTP ${response.status}`
-        const cause = errorData?.cause
-          ?.map((c: unknown) => (typeof c === 'string' ? c : JSON.stringify(c)))
-          .join('; ') || ''
+        // ML devuelve `cause` como array, string u objeto según el endpoint: normalizar antes de mapear
+        const rawCause = (errorData as { cause?: unknown } | null)?.cause
+        const causeList: unknown[] = Array.isArray(rawCause) ? rawCause : (rawCause ? [rawCause] : [])
+        const cause = causeList
+          .map((c: unknown) => (typeof c === 'string' ? c : JSON.stringify(c)))
+          .join('; ')
 
         if (response.status === 401 && attempt < MAX_RETRIES) {
           const { clearTokenCache } = await import('./auth.js')
@@ -76,8 +79,11 @@ export async function mlFetch<T>(
           continue
         }
 
+        // 24/9: adjuntar el body crudo del error (recortado) para no perder detalle (cause_id, references, etc.)
+        let raw = ''
+        try { raw = JSON.stringify(errorData).slice(0, 800) } catch { raw = '' }
         throw new Error(
-          `Error API ML: ${errorMsg}${cause ? ` (${cause})` : ''} [${method} ${path}]`
+          `Error API ML: ${errorMsg}${cause ? ` (${cause})` : ''} [${method} ${path}]${raw ? ` raw=${raw}` : ''}`
         )
       }
 

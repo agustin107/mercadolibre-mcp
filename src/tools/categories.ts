@@ -102,11 +102,15 @@ export function registerGetCategories(server: McpServer) {
       // Si se pasa query, usar el predictor de categorías
       if (query) {
         const predictions = await mlFetch<Array<{
-          id: string
-          name: string
-          path_from_root: Array<{ id: string; name: string }>
+          id?: string
+          name?: string
+          category_id?: string
+          category_name?: string
+          domain_id?: string
+          domain_name?: string
+          path_from_root?: Array<{ id: string; name: string }>
         }>>(`/sites/${config.siteId}/domain_discovery/search`, {
-          params: { q: query },
+          params: { q: query, limit: 8 },
         }).catch(() =>
           // Fallback al category predictor clásico
           mlFetch<Array<{
@@ -127,10 +131,19 @@ export function registerGetCategories(server: McpServer) {
           }
         }
 
-        const cats = (Array.isArray(predictions) ? predictions : [predictions]).map(p => ({
-          id: p.id,
-          nombre: p.name,
-          ruta: p.path_from_root?.map(r => r.name).join(' > ') || '',
+        // domain_discovery devuelve {category_id, category_name, domain_id, domain_name}; el predictor viejo {id, name, path_from_root}
+        type Pred = { id?: string; name?: string; category_id?: string; category_name?: string; domain_id?: string; path_from_root?: Array<{ id: string; name: string }> }
+        const lista = (Array.isArray(predictions) ? predictions : [predictions]) as Pred[]
+        const cats = await Promise.all(lista.map(async p => {
+          const id = p.category_id ?? p.id
+          let ruta = p.path_from_root?.map(r => r.name).join(' > ') || ''
+          if (!ruta && id) {
+            try {
+              const c = await mlFetch<{ path_from_root: Array<{ name: string }> }>(`/categories/${id}`)
+              ruta = c.path_from_root.map(r => r.name).join(' > ')
+            } catch { /* sin ruta */ }
+          }
+          return { id, nombre: p.category_name ?? p.name, dominio: p.domain_id, ruta }
         }))
 
         return {

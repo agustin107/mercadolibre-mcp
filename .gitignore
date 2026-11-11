@@ -4,3 +4,6 @@ dist/
 
 .env.*
 reports/
+
+*.bak*
+.tmp*

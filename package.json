@@ -1,6 +1,6 @@
 {
   "name": "@agustin107/mercadolibre-mcp",
-  "version": "2.7.0",
+  "version": "2.7.1",
   "description": "MCP server operativo para Mercado Libre — tools de seller + TRAID Hub (knowledge, proxy oficial, token-store Supabase). Auto-refresh OAuth integrado.",
   "license": "MIT",
   "type": "module",
