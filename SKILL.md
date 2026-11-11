@@ -1,6 +1,6 @@
 ---
 name: mercadolibre-mcp
-description: Operaciones diarias de seller en Mercado Libre / Meli / MercadoLibre — 40 MCP tools ML (publicaciones, precio, stock, atributos, órdenes, envíos, tracking, mensajes, preguntas, ads, reputación, competencia, categorías, revenue, inventario, demanda) + TRAID knowledge + proxy official_*. Usá esta skill cuando el usuario mencione Mercado Libre, Meli, publicaciones MLA/MLM/MLB, seller_id, órdenes ML, preguntas sin responder, health de items, comparar con TiendaNube, sync TN↔ML, o quiera actualizar precio/stock/atributos/responder compradores/cargar tracking. ⛔ NUNCA pedir refresh manual de tokens — el server auto-renueva (single-flight, .env.local, lease Supabase). Única excepción: invalid_grant → re-OAuth inicial.
+description: Operaciones diarias de seller en Mercado Libre / Meli / MercadoLibre — 40 MCP tools ML (publicaciones, precio, stock, atributos, órdenes, envíos, tracking, mensajes, preguntas, ads, reputación, competencia, categorías, revenue, inventario, demanda) + TRAID knowledge + proxy official_*. Usá esta skill cuando el usuario mencione Mercado Libre, Meli, publicaciones MLA/MLM/MLB, seller_id, órdenes ML, preguntas sin responder, health de items, comparar con TiendaNube, o quiera responder compradores/cargar tracking. Precio, stock, altas y fichas de KitMaq NO se escriben acá: van al sistema interno (kitmaq-internal) y los lleva el runner; esas tools se niegan salvo KITMAQ_ESCRITURAS_MOTOR=permitir. ⛔ NUNCA pedir refresh manual de tokens — el server auto-renueva (single-flight, .env.local, lease Supabase). Única excepción: invalid_grant → re-OAuth inicial.
 version: 2.7.0
 metadata:
   openclaw:
@@ -19,6 +19,20 @@ metadata:
 # Mercado Libre MCP (operativo)
 
 v2.7.0 — 40 tools ML de operatoria diaria + 2 TRAID + proxy `official_*`. Nombres alineados con [tiendanube-mcp](https://github.com/MarcosNahuel/tiendanube-mcp) para sync cross-platform.
+
+---
+
+## ⛔ Precio, stock, publicaciones y fichas: por el sistema interno de KitMaq
+
+En la cuenta de KitMaq, el **sistema interno** (conector `kitmaq-internal`) es la fuente de verdad de costos, precios (L3 = MercadoLibre), stock, fichas y SKUs, y un **runner** es el único que los escribe en MercadoLibre, con vista previa, OK y tope por corrida.
+
+Salvo `KITMAQ_ESCRITURAS_MOTOR=permitir`, estas tools **se niegan antes de llamar a la API** y dicen dónde hacer el cambio: `update_price`, `update_stock`, `batch_update_stock_price`, `update_item`, `create_item`, `close_item`, `update_attributes`.
+
+- Precio («subí 5 % las soldadoras»): `ver_precios` en el sistema interno → `cambiar_precio_fijo` (por SKU) o `cambiar_parametros_precios` (criterio del canal) con `confirmar=false` para la vista previa (`cambiar_precio_fijo` reemplaza todo el precio fijo del SKU: reenviar los valores fijos que tienen que quedar) → OK de la persona → `confirmar=true` deja el cambio en la propuesta pendiente → `aprobar_propuesta_precios` o `/precios/propuesta`. El runner lo lleva al canal.
+- Stock: se corrige en POSBerry.
+- Altas: `/precios/mercadolibre`. Fichas (título, descripción, atributos, fotos): `/precios/fichas` y `/precios/mercadolibre/datos`.
+
+Siguen abiertas: `answer_question`, `send_message`, `update_shipment_tracking`, `update_sale_terms`, `manage_ads`.
 
 ---
 
@@ -66,13 +80,11 @@ Si el usuario no da `seller_id`, intentá inferirlo del token/config antes de pe
 | Ver catálogo activo | `list_products` → `get_item` para detalle |
 | Solo descripción | `get_item_description` |
 | Buscar por SKU interno | `get_item_by_sku` |
-| Cambiar precio o stock | `update_price` / `update_stock` (confirman antes→después) |
-| Cambiar varios campos | `update_item` |
-| Atributos de ficha | `get_category_attributes` → `update_attributes` |
-| Garantía / sale_terms | `update_sale_terms` |
-| Muchos items | `batch_update_stock_price` (máx 50, secuencial) |
-| Nueva publicación | `get_categories` → `get_category_attributes` → `create_item` (**confirmar antes**) |
-| Pausar/cerrar | `close_item` (**confirmar antes**) |
+| Cambiar precio o stock | Sistema interno (ver arriba); `update_price` / `update_stock` se niegan |
+| Cambiar título, descripción, atributos | Ficha en el sistema interno; `update_item` / `update_attributes` se niegan |
+| Ver atributos de una categoría | `get_category_attributes` |
+| Garantía / sale_terms | `update_sale_terms` (**confirmar antes**) |
+| Nueva publicación, pausar o cerrar | Sistema interno (`/precios/mercadolibre`); `create_item` / `close_item` se niegan |
 | Ventas / ingresos | `get_revenue_summary`, `get_sales_by_period`, `get_orders_dashboard` |
 | Stock bajo / quiebre | `get_inventory_alerts`, `stockout_risk` |
 | Pricing competitivo | `price_to_win`, `price_history`, `search_competitors` |
@@ -81,7 +93,7 @@ Si el usuario no da `seller_id`, intentá inferirlo del token/config antes de pe
 | Envío | `list_shipments(order_id)` → `update_shipment_tracking` |
 | Knowledge TRAID | `traid_feature_lookup`, `traid_client_context` |
 | Docs oficiales ML | tools `official_*` (proxy al MCP de Mercado Libre) |
-| Sync TN↔ML | Matchear por SKU (`seller_custom_field` en ML = SKU TN); comparar descripción, imgs, atributos, marca |
+| Comparar TN↔ML | Matchear por SKU (`seller_custom_field` en ML = SKU TN); las diferencias se corrigen en el sistema interno |
 
 Preferí `list_orders` sobre `get_orders` (alias legacy).
 
@@ -111,14 +123,14 @@ Detalle: [references/oauth-setup.md](./references/oauth-setup.md). OAuth inicial
 | `get_item` | Lectura | item_id |
 | `get_item_description` | Lectura | item_id |
 | `get_item_by_sku` | Lectura | seller_id, sku |
-| `update_item` | Escritura | item_id, title, price, stock, status, sku |
-| `update_attributes` | Escritura | item_id, attributes[] |
+| `update_item` | Escritura (motor: se niega) | item_id, title, price, stock, status, sku |
+| `update_attributes` | Escritura (motor: se niega) | item_id, attributes[] |
 | `update_sale_terms` | Escritura | item_id, sale_terms[] |
-| `create_item` | Escritura | title, category_id, price, stock, pictures/attributes/sale_terms/description |
-| `close_item` | Escritura | item_id, action (pause/close) |
-| `batch_update_stock_price` | Escritura | updates[] (hasta 50) |
-| `update_price` | Escritura | item_id, price |
-| `update_stock` | Escritura | item_id, available_quantity |
+| `create_item` | Escritura (motor: se niega) | title, category_id, price, stock, pictures/attributes/sale_terms/description |
+| `close_item` | Escritura (motor: se niega) | item_id, action (pause/close) |
+| `batch_update_stock_price` | Escritura (motor: se niega) | updates[] (hasta 50) |
+| `update_price` | Escritura (motor: se niega) | item_id, price |
+| `update_stock` | Escritura (motor: se niega) | item_id, available_quantity |
 
 ### Preguntas y mensajes (5)
 
@@ -184,13 +196,16 @@ User: "¿cuántas preguntas sin responder?"
 → list_questions({ seller_id, status: "UNANSWERED" })
 
 User: "stock del SKU I140-6-220 a 10"
-→ get_item_by_sku → update_stock (mostrar antes/después)
+→ get_item_by_sku (mostrar el actual) → se corrige en POSBerry; el runner lo lleva a ML
+
+User: "subí 5% las soldadoras"
+→ kitmaq-internal: ver_precios({ buscar: "soldadora" }) → cambiar_precio_fijo(confirmar=false) por SKU → OK → confirmar=true → aprobar_propuesta_precios
 
 User: "ingresos del mes y productos con stock bajo"
 → get_revenue_summary({ days: 30 }) + get_inventory_alerts({ threshold: 5 })
 
 User: "completá atributos de ficha de MLA…"
-→ get_item → get_category_attributes → update_attributes
+→ get_item → get_category_attributes (ver qué falta) → se completa en /precios/mercadolibre/datos del sistema interno
 
 User: "compará TN vs ML por SKU"
 → list_products + tiendanube list_products → matchear SKU → gap analysis
@@ -207,7 +222,7 @@ User: "compará TN vs ML por SKU"
 
 ## Boundaries
 
-Confirmar antes de: `create_item`, bulk >10 items, `close_item` en activas.
+Confirmar antes de toda escritura abierta (`answer_question`, `send_message`, `update_shipment_tracking`, `update_sale_terms`, `manage_ads`). Las del motor se niegan: el cambio va al sistema interno; no pedir que se prenda `KITMAQ_ESCRITURAS_MOTOR` para un pedido común.
 
 Nunca: loguear tokens, eliminar órdenes, modificar datos de compradores, **pedir refresh manual de tokens**, sugerir curl/cron/n8n para auth.
 

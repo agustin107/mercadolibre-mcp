@@ -14,12 +14,12 @@ Hecho por [TRAID Agency](https://traid.agency).
 | `list_products` | Lectura |
 | `get_item` | Lectura |
 | `get_item_by_sku` | Lectura |
-| `update_item` | Escritura |
-| `create_item` | Escritura |
-| `close_item` | Escritura |
-| `batch_update_stock_price` | Escritura |
-| `update_price` | Escritura |
-| `update_stock` | Escritura |
+| `update_item` | Escritura (motor, ver abajo) |
+| `create_item` | Escritura (motor, ver abajo) |
+| `close_item` | Escritura (motor, ver abajo) |
+| `batch_update_stock_price` | Escritura (motor, ver abajo) |
+| `update_price` | Escritura (motor, ver abajo) |
+| `update_stock` | Escritura (motor, ver abajo) |
 
 ### Preguntas y mensajes (5)
 | Tool | Tipo |
@@ -100,6 +100,22 @@ Guía OAuth (scopes `read` + `write` + `offline_access`): **[docs/CONFIGURACION-
   }
 }
 ```
+
+### Escrituras del motor de KitMaq (`KITMAQ_ESCRITURAS_MOTOR`)
+
+Precio, stock, altas/pausas/cierres y contenido de las publicaciones (título, descripción, atributos, fotos) los escribe el runner del sistema interno de KitMaq, con vista previa, OK y tope por corrida. Para que una sesión no deje MercadoLibre distinto del motor, estas tools **se niegan por defecto** y devuelven un mensaje que dice dónde hacer el cambio:
+
+`update_price`, `update_stock`, `batch_update_stock_price`, `update_item`, `create_item`, `close_item`, `update_attributes`.
+
+Siguen abiertas las escrituras que el motor no cubre: `answer_question`, `send_message`, `update_shipment_tracking`, `update_sale_terms`, `manage_ads`.
+
+Para volver al comportamiento anterior (escribir directo), agregá en `.env.local` o en el entorno del server:
+
+```env
+KITMAQ_ESCRITURAS_MOTOR=permitir
+```
+
+Cualquier otro valor, o la variable ausente, mantiene el candado.
 
 ## Comandos
 

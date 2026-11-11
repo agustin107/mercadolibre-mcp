@@ -5,6 +5,7 @@
 //
 // ⛔ Auth: auto-refresh interno (src/auth.ts). Agentes/LLMs: NUNCA pedir refresh manual de tokens.
 
+import { createRequire } from 'node:module'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 
@@ -60,7 +61,8 @@ import { registerUpstreamProxy } from './upstream-proxy.js'
 import { registerTraidLayer } from './layers/traid/index.js'
 import { guardServer } from './tool-guard.js'
 
-export const PACKAGE_VERSION = '2.7.0'
+// Resolves from both src/ (tsx) and dist/ (node): package.json sits one level up.
+export const PACKAGE_VERSION: string = createRequire(import.meta.url)('../package.json').version
 
 const rawServer = new McpServer({
   name: 'mercadolibre',

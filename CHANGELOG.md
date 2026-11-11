@@ -2,6 +2,11 @@
 
 Todas las versiones de `@agustin107/mercadolibre-mcp` en orden inverso.
 
+## [Unreleased]
+
+### Changed
+- **Cambio de comportamiento por defecto:** las tools que escriben campos del motor de precios de KitMaq (`update_price`, `update_stock`, `batch_update_stock_price`, `update_item`, `create_item`, `close_item`, `update_attributes`) se niegan antes de llamar a la API y explican dónde se hace el cambio (sistema interno, POSBerry, runner). Para volver al comportamiento anterior: `KITMAQ_ESCRITURAS_MOTOR=permitir`. El candado vive en `src/tool-guard.ts` (`guardServer`).
+
 ## [2.7.0] — 2026-09-15
 
 Merge de la línea operativa local (v2.6.0: create_item, mensajes, envíos, analytics, scripts TN↔ML) con el fork TRAID ML Hub (`1.2.0-alpha.2`: token-store Supabase, lease CAS, knowledge tools, proxy oficial, candados).

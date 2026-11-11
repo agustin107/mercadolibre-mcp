@@ -1,0 +1,9 @@
+{
+  "name": "kitmaq-mercadolibre",
+  "version": "0.2.0",
+  "description": "Operar la cuenta de MercadoLibre de KitMaq desde Cowork: consultar publicaciones, ordenes, envios y analytics, responder preguntas y mensajes post-venta, con las reglas de marca de KitMaq. Precio, stock, altas y fichas van por el sistema interno de KitMaq.",
+  "author": {
+    "name": "Agustin (KitMaq)"
+  },
+  "keywords": ["mercadolibre", "meli", "kitmaq", "ecommerce", "seller", "mla"]
+}
