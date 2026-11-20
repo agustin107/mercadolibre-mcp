@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { mlFetch } from '../client.js'
+import { mlFetch, mlItemsBulk } from '../client.js'
 import type { MLProduct } from '../types.js'
 import { getConfig } from '../auth.js'
 
@@ -40,18 +40,7 @@ export function registerListProducts(server: McpServer) {
       }
 
       const itemIds = searchResult.results
-      const products: MLProduct[] = []
-
-      for (let i = 0; i < itemIds.length; i += 20) {
-        const batch = itemIds.slice(i, i + 20)
-        const items = await mlFetch<Array<{ code: number; body: MLProduct }>>(
-          '/items',
-          { params: { ids: batch.join(',') } }
-        )
-        for (const item of items) {
-          if (item.code === 200) products.push(item.body)
-        }
-      }
+      const products = await mlItemsBulk<MLProduct>(itemIds)
 
       const summary = products.map(p => ({
         id: p.id,
@@ -86,12 +75,20 @@ export function registerGetItem(server: McpServer) {
       item_id: z.string().describe('ID de la publicación (ej: MLA1234567890)'),
     },
     async ({ item_id }) => {
-      const item = await mlFetch<MLProduct & {
+      let item: MLProduct & {
         description?: string
         pictures?: Array<{ id: string; url: string }>
         seller_custom_field?: string
         attributes?: Array<{ id: string; name: string; value_name: string }>
-      }>(`/items/${item_id}`)
+      }
+      try {
+        item = await mlFetch<typeof item>(`/items/${item_id}`)
+      } catch (error) {
+        if (error instanceof Error && /\[GET \/items\/[^\]\/]+\]/.test(error.message) && /\b403\b|forbidden/i.test(error.message)) {
+          throw new Error(`La publicación ${item_id} pertenece a otra cuenta o el token no tiene acceso a ella (403). ${error.message}`)
+        }
+        throw error
+      }
 
       // La descripción NO viene en el payload del ítem (el array `descriptions`
       // está vacío). Se obtiene del recurso /items/{id}/description, que puede

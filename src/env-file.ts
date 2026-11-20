@@ -4,6 +4,9 @@ export function resolveEnvFilePath(): string | null {
   const explicit = process.env.ML_ENV_FILE?.trim()
   if (explicit) return explicit
 
+  // Never fall back to a real .env.local when running under `node --test`.
+  if (process.env.NODE_TEST_CONTEXT) return null
+
   const cwdFile = `${process.cwd()}/.env.local`
   if (existsSync(cwdFile)) return cwdFile
 
