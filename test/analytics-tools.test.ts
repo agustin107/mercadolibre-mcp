@@ -8,6 +8,7 @@ import {
   aggregateStockoutRisk,
   type ItemDetail,
 } from '../src/tools/stockout_risk.ts'
+import { buildItemsBulkParams, parseItemsBulk } from '../src/client.ts'
 import { normalizePriceToWin } from '../src/tools/price_to_win.ts'
 import { normalizePriceHistory } from '../src/tools/price_history.ts'
 
@@ -93,7 +94,7 @@ test('aggregateStockoutRisk: include_no_sales=false descarta ítems sin ventas',
   assert.equal(rows[0].item_id, 'A')
 })
 
-test('aggregateStockoutRisk: ítem sin detalle (borrado entre search y multiget) se saltea', () => {
+test('aggregateStockoutRisk: ítem sin detalle (borrado entre search y /items/bulk) se saltea', () => {
   const ids = ['A', 'GHOST']
   const details = new Map<string, ItemDetail>([['A', { available_quantity: 5, status: 'active' }]])
   const units = new Map<string, number>([['A', 28], ['GHOST', 28]])
@@ -141,4 +142,30 @@ test('normalizePriceHistory: usa events si está, sino results', () => {
   const empty = normalizePriceHistory('MLA1', {})
   assert.equal(empty.count, 0)
   assert.deepEqual(empty.events, [])
+})
+
+// ----------------------------- /items/bulk -----------------------------
+
+test('buildItemsBulkParams: ids juntos y atributos con prefijo body. + status_code', () => {
+  const p = buildItemsBulkParams(['MLA1', 'MLA2'], 'id,title')
+  assert.equal(p.ids, 'MLA1,MLA2')
+  assert.equal(p.attributes, 'status_code,body.id,body.title')
+  assert.equal(new URLSearchParams(p).toString().startsWith('ids=MLA1%2CMLA2'), true)
+})
+
+test('buildItemsBulkParams: sin attributes no los manda (ítem completo)', () => {
+  assert.deepEqual(buildItemsBulkParams(['MLA1']), { ids: 'MLA1' })
+})
+
+test('parseItemsBulk: lee status_code y descarta lo que no es 200', () => {
+  const out = parseItemsBulk<{ id: string }>([
+    { status_code: 200, body: { id: 'MLA1' } },
+    { status_code: 404, body: { message: 'not found' } },
+  ])
+  assert.deepEqual(out, [{ id: 'MLA1' }])
+})
+
+test('parseItemsBulk: formato viejo (code) o no-array falla, no devuelve catálogo vacío', () => {
+  assert.throws(() => parseItemsBulk([{ code: 200, body: { id: 'MLA1' } }]), /formato inesperado/)
+  assert.throws(() => parseItemsBulk({ message: 'x' }), /formato inesperado/)
 })

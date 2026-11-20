@@ -10,15 +10,13 @@
 //   - GET /users/me                          → seller_id (si no se pasa override)
 //   - GET /orders/search?seller=…&date_from… → unidades vendidas por ítem (paginado)
 //   - GET /users/{id}/items/search           → ids de publicaciones del seller (paginado)
-//   - GET /items?ids=…&attributes=…          → stock + título + estado (multiget)
+//   - GET /items/bulk?ids=…&attributes=…      → stock + título + estado (bulk)
 
 import { z } from 'zod'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { mlFetch, mlGetAll } from '../client.js'
+import { mlFetch, mlGetAll, mlItemsBulk } from '../client.js'
 
 const DAY_MS = 86_400_000
-/** Cuántos ids admite el multiget `/items?ids=` por llamada. */
-const MULTIGET_CHUNK = 20
 
 export type RiskLevel = 'critico' | 'alto' | 'medio' | 'bajo' | 'sin_riesgo'
 
@@ -168,11 +166,6 @@ interface MlOrder {
   status: string
   order_items: MlOrderItemLine[]
 }
-interface MlMultiGetEntry {
-  code: number
-  body: { id: string; title?: string; available_quantity?: number; status?: string }
-}
-
 /** Suma unidades vendidas por item_id en la ventana (excluye órdenes canceladas). */
 async function fetchUnitsSold(
   sellerId: number,
@@ -205,17 +198,12 @@ async function fetchItemIds(sellerId: number, status: 'active' | 'paused' | 'all
   return mlGetAll<string>(`/users/${sellerId}/items/search`, params)
 }
 
-/** Trae stock/título/estado en lotes via multiget `/items?ids=`. */
+/** Trae stock/título/estado en lotes via `/items/bulk`. */
 async function fetchItemDetails(itemIds: string[]): Promise<Map<string, ItemDetail>> {
+  const bodies = await mlItemsBulk<ItemDetail & { id: string }>(itemIds, 'id,title,available_quantity,status')
   const byId = new Map<string, ItemDetail>()
-  for (let i = 0; i < itemIds.length; i += MULTIGET_CHUNK) {
-    const chunk = itemIds.slice(i, i + MULTIGET_CHUNK)
-    const entries = await mlFetch<MlMultiGetEntry[]>('/items', {
-      params: { ids: chunk.join(','), attributes: 'id,title,available_quantity,status' },
-    })
-    for (const entry of entries) {
-      if (entry.code === 200 && entry.body?.id) byId.set(entry.body.id, entry.body)
-    }
+  for (const body of bodies) {
+    if (body?.id) byId.set(body.id, body)
   }
   return byId
 }

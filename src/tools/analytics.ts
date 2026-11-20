@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { mlFetch, mlGetAll } from '../client.js'
+import { mlFetch, mlGetAll, mlItemsBulk } from '../client.js'
 import type { MLOrder, MLProduct } from '../types.js'
 
 function isoFromDaysAgo(days: number): string {
@@ -220,16 +220,13 @@ export function registerGetInventoryAlerts(server: McpServer) {
 
       for (let i = 0; i < search.results.length; i += 20) {
         const batch = search.results.slice(i, i + 20)
-        const items = await mlFetch<Array<{ code: number; body: MLProduct }>>(
-          '/items',
-          { params: { ids: batch.join(','), attributes: 'id,title,available_quantity,status' } }
-        )
+        const items = await mlItemsBulk<MLProduct>(batch, 'id,title,available_quantity,status')
         for (const item of items) {
-          if (item.code === 200 && item.body.available_quantity <= threshold) {
+          if (item.available_quantity <= threshold) {
             alerts.push({
-              id: item.body.id,
-              title: item.body.title,
-              stock: item.body.available_quantity,
+              id: item.id,
+              title: item.title,
+              stock: item.available_quantity,
             })
           }
         }

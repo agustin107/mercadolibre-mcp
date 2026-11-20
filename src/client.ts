@@ -101,21 +101,49 @@ export async function mlFetch<T>(
   throw lastError || new Error('Error inesperado en mlFetch')
 }
 
-export async function mlMultiGet<T>(ids: string[], path: string): Promise<T[]> {
-  if (ids.length === 0) return []
+/** Ids por llamada que admite `/items/bulk`. */
+export const ITEMS_BULK_CHUNK = 20
 
-  const BATCH_SIZE = 20
-  const results: T[] = []
+/** Entrada de `/items/bulk`: `{ status_code, body }` (el multiget viejo usaba `code`). */
+export interface MlItemsBulkEntry<T> {
+  status_code: number
+  body: T
+}
 
-  for (let i = 0; i < ids.length; i += BATCH_SIZE) {
-    const batch = ids.slice(i, i + BATCH_SIZE)
-    const data = await mlFetch<T[]>(path, {
-      params: { ids: batch.join(',') },
-    })
-    results.push(...data)
+/**
+ * Params de `GET /items/bulk`. Los atributos van con prefijo `body.`; `status_code`
+ * se pide siempre porque `attributes` filtra el elemento entero y, si no, se pierde.
+ * Sin `attributes` ML devuelve el ítem completo.
+ */
+export function buildItemsBulkParams(ids: string[], attributes?: string): Record<string, string> {
+  const params: Record<string, string> = { ids: ids.join(',') }
+  if (attributes) {
+    params.attributes = ['status_code', ...attributes.split(',').map(a => `body.${a.trim()}`)].join(',')
   }
+  return params
+}
 
-  return results
+/** Bodies de las entradas con `status_code === 200`. Falla ante un formato inesperado. */
+export function parseItemsBulk<T>(data: unknown): T[] {
+  if (!Array.isArray(data) || data.some(e => !e || typeof e !== 'object' || !('status_code' in e))) {
+    throw new Error(`/items/bulk respondió en un formato inesperado: ${JSON.stringify(data).slice(0, 200)}`)
+  }
+  return (data as MlItemsBulkEntry<T>[]).filter(e => e.status_code === 200).map(e => e.body)
+}
+
+/**
+ * Lee publicaciones en lotes de 20 con `GET /items/bulk` (reemplaza al multiget
+ * `/items?ids=`, deprecado por ML: 403). Devuelve solo los bodies con status 200.
+ */
+export async function mlItemsBulk<T>(ids: string[], attributes?: string): Promise<T[]> {
+  const out: T[] = []
+  for (let i = 0; i < ids.length; i += ITEMS_BULK_CHUNK) {
+    const data = await mlFetch<unknown>('/items/bulk', {
+      params: buildItemsBulkParams(ids.slice(i, i + ITEMS_BULK_CHUNK), attributes),
+    })
+    out.push(...parseItemsBulk<T>(data))
+  }
+  return out
 }
 
 /**
